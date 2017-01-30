@@ -56,7 +56,12 @@ PYBIND11_PLUGIN(_cscore) {
     rawevent
       .def(py::init<>())
       .def(py::init<cs::RawEvent::Kind>())
-      .def(py::init<llvm::StringRef,CS_Source,cs::VideoMode>());
+      .def(py::init<llvm::StringRef,CS_Source,cs::VideoMode>())
+      .def_readonly("name", &RawEvent::name)
+      .def_readonly("mode", &RawEvent::mode)
+      .def_readonly("kind", &RawEvent::kind)
+      .def_readonly("value", &RawEvent::value)
+      .def_readonly("valueStr", &RawEvent::valueStr);
     
     py::enum_<RawEvent::Kind>(rawevent, "Kind")
       .value("kSourceCreated", RawEvent::Kind::kSourceCreated)
@@ -87,7 +92,10 @@ PYBIND11_PLUGIN(_cscore) {
       .def("isString", &VideoProperty::IsString)
       .def("isEnum", &VideoProperty::IsEnum)
       .def("get", &VideoProperty::Get)
-      .def("set", &VideoProperty::Set)
+      .def("set", [](VideoProperty &__inst, int value) {
+        py::gil_scoped_release __release;
+        __inst.Set(value);
+      })
       .def("getMin", &VideoProperty::GetMin)
       .def("getMax", &VideoProperty::GetMax)
       .def("getStep", &VideoProperty::GetStep)
@@ -98,7 +106,10 @@ PYBIND11_PLUGIN(_cscore) {
         auto __ret = __inst.GetString(buf);
         return std::make_tuple(__ret, buf);
       })*/
-      .def("setString", &VideoProperty::SetString)
+      .def("setString", [](VideoProperty &__inst, llvm::StringRef value) {
+        py::gil_scoped_release __release;
+        __inst.SetString(value);
+      })
       .def("getChoices", &VideoProperty::GetChoices)
       .def("getLastStatus", &VideoProperty::GetLastStatus);
     
@@ -125,14 +136,27 @@ PYBIND11_PLUGIN(_cscore) {
       .def("getProperty", &VideoSource::GetProperty)
       .def("enumerateProperties", &VideoSource::EnumerateProperties)
       .def("getVideoMode", &VideoSource::GetVideoMode)
-      .def("setVideoMode", [](VideoSource &__inst, VideoMode mode) {
+      .def("setVideoMode", [](VideoSource &__inst) {
+        VideoMode mode; py::gil_scoped_release __release;
         auto __ret = __inst.SetVideoMode(mode);
         return std::make_tuple(__ret, mode);
       })
-      .def("setVideoMode", (bool (VideoSource::*)(VideoMode::PixelFormat,int,int,int))&VideoSource::SetVideoMode)
-      .def("setPixelFormat", &VideoSource::SetPixelFormat)
-      .def("setResolution", &VideoSource::SetResolution)
-      .def("setFPS", &VideoSource::SetFPS)
+      .def("setVideoMode", [](VideoSource &__inst, VideoMode::PixelFormat pixelFormat, int width, int height, int fps) {
+        py::gil_scoped_release __release;
+        return __inst.SetVideoMode(pixelFormat, width, height, fps);
+      })
+      .def("setPixelFormat", [](VideoSource &__inst, VideoMode::PixelFormat pixelFormat) {
+        py::gil_scoped_release __release;
+        return __inst.SetPixelFormat(pixelFormat);
+      })
+      .def("setResolution", [](VideoSource &__inst, int width, int height) {
+        py::gil_scoped_release __release;
+        return __inst.SetResolution(width, height);
+      })
+      .def("setFPS", [](VideoSource &__inst, int fps) {
+        py::gil_scoped_release __release;
+        return __inst.SetFPS(fps);
+      })
       .def("enumerateVideoModes", &VideoSource::EnumerateVideoModes)
       .def("getLastStatus", &VideoSource::GetLastStatus)
       .def("enumerateSinks", &VideoSource::EnumerateSinks)
@@ -147,14 +171,35 @@ PYBIND11_PLUGIN(_cscore) {
     py::class_<VideoCamera, VideoSource> videocamera(m, "VideoCamera");
     videocamera
       .def(py::init<>())
-      .def("setBrightness", &VideoCamera::SetBrightness)
+      .def("setBrightness", [](VideoCamera &__inst, int brightness) {
+        py::gil_scoped_release __release;
+        __inst.SetBrightness(brightness);
+      })
       .def("getBrightness", &VideoCamera::GetBrightness)
-      .def("setWhiteBalanceAuto", &VideoCamera::SetWhiteBalanceAuto)
-      .def("setWhiteBalanceHoldCurrent", &VideoCamera::SetWhiteBalanceHoldCurrent)
-      .def("setWhiteBalanceManual", &VideoCamera::SetWhiteBalanceManual)
-      .def("setExposureAuto", &VideoCamera::SetExposureAuto)
-      .def("setExposureHoldCurrent", &VideoCamera::SetExposureHoldCurrent)
-      .def("setExposureManual", &VideoCamera::SetExposureManual);
+      .def("setWhiteBalanceAuto", [](VideoCamera &__inst) {
+        py::gil_scoped_release __release;
+        __inst.SetWhiteBalanceAuto();
+      })
+      .def("setWhiteBalanceHoldCurrent", [](VideoCamera &__inst) {
+        py::gil_scoped_release __release;
+        __inst.SetWhiteBalanceHoldCurrent();
+      })
+      .def("setWhiteBalanceManual", [](VideoCamera &__inst, int value) {
+        py::gil_scoped_release __release;
+        __inst.SetWhiteBalanceManual(value);
+      })
+      .def("setExposureAuto", [](VideoCamera &__inst) {
+        py::gil_scoped_release __release;
+        __inst.SetExposureAuto();
+      })
+      .def("setExposureHoldCurrent", [](VideoCamera &__inst) {
+        py::gil_scoped_release __release;
+        __inst.SetExposureHoldCurrent();
+      })
+      .def("setExposureManual", [](VideoCamera &__inst, int value) {
+        py::gil_scoped_release __release;
+        __inst.SetExposureManual(value);
+      });
     
     py::enum_<VideoCamera::WhiteBalance>(videocamera, "WhiteBalance")
       .value("kFixedIndoor", VideoCamera::WhiteBalance::kFixedIndoor)
@@ -209,6 +254,7 @@ PYBIND11_PLUGIN(_cscore) {
       .def(py::init<llvm::StringRef,VideoMode>())
       .def(py::init<llvm::StringRef,VideoMode::PixelFormat,int,int,int>())
       .def("putFrame", [](CvSource &__inst, cv::Mat &image) {
+        py::gil_scoped_release release;
         __inst.PutFrame(image);
       })
       .def("notifyError", &CvSource::NotifyError)
@@ -237,7 +283,10 @@ PYBIND11_PLUGIN(_cscore) {
       .def("getKind", &VideoSink::GetKind)
       .def("getName", &VideoSink::GetName)
       .def("getDescription", &VideoSink::GetDescription)
-      .def("setSource", &VideoSink::SetSource)
+      .def("setSource", [](VideoSink &__inst, VideoSource source) {
+        py::gil_scoped_release __release;
+        __inst.SetSource(source);
+      })
       .def("getSource", &VideoSink::GetSource)
       .def("getSourceProperty", &VideoSink::GetSourceProperty)
       .def("getLastStatus", &VideoSink::GetLastStatus)
@@ -263,6 +312,7 @@ PYBIND11_PLUGIN(_cscore) {
       .def(py::init<llvm::StringRef,std::function<void(uint64_t)>>())
       .def("setDescription", &CvSink::SetDescription)
       .def("grabFrame", [](CvSink &__inst, cv::Mat &image) {
+        py::gil_scoped_release release;
         auto __ret = __inst.GrabFrame(image);
         return std::make_tuple(__ret, image);
       })
