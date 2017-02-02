@@ -1,5 +1,6 @@
 
 #include <pybind11/pybind11.h>
+#include <pybind11/functional.h>
 #include <pybind11/operators.h>
 #include <pybind11/stl.h>
 namespace py = pybind11;
@@ -13,11 +14,22 @@ using namespace cs;
 #include "wpiutil_converters.hpp"
 
 
+class cscore_destructor {
+public:
+    ~cscore_destructor() {
+        CS_Destroy();
+    }
+};
+
+
 PYBIND11_PLUGIN(_cscore) {
 
     NDArrayConverter::init_numpy();
 
     py::module m("_cscore");
+    
+    py::class_<cscore_destructor> _d(m, "cscore_destructor");
+    m.attr("__destructor") = new cscore_destructor();
     
     // cscore_cpp.h
     
@@ -51,34 +63,8 @@ PYBIND11_PLUGIN(_cscore) {
       .value("kRGB565", VideoMode::PixelFormat::kRGB565)
       .value("kBGR", VideoMode::PixelFormat::kBGR)
       .value("kGray", VideoMode::PixelFormat::kGray);
-    
-    py::class_<RawEvent> rawevent(m, "RawEvent");
-    rawevent
-      .def(py::init<>())
-      .def(py::init<cs::RawEvent::Kind>())
-      .def(py::init<llvm::StringRef,CS_Source,cs::VideoMode>())
-      .def_readonly("name", &RawEvent::name)
-      .def_readonly("mode", &RawEvent::mode)
-      .def_readonly("kind", &RawEvent::kind)
-      .def_readonly("value", &RawEvent::value)
-      .def_readonly("valueStr", &RawEvent::valueStr);
-    
-    py::enum_<RawEvent::Kind>(rawevent, "Kind")
-      .value("kSourceCreated", RawEvent::Kind::kSourceCreated)
-      .value("kSourceDestroyed", RawEvent::Kind::kSourceDestroyed)
-      .value("kSourceConnected", RawEvent::Kind::kSourceConnected)
-      .value("kSourceDisconnected", RawEvent::Kind::kSourceDisconnected)
-      .value("kSourceVideoModesUpdated", RawEvent::Kind::kSourceVideoModesUpdated)
-      .value("kSourceVideoModeChanged", RawEvent::Kind::kSourceVideoModeChanged)
-      .value("kSourcePropertyCreated", RawEvent::Kind::kSourcePropertyCreated)
-      .value("kSourcePropertyValueUpdated", RawEvent::Kind::kSourcePropertyValueUpdated)
-      .value("kSourcePropertyChoicesUpdated", RawEvent::Kind::kSourcePropertyChoicesUpdated)
-      .value("kSinkSourceChanged", RawEvent::Kind::kSinkSourceChanged)
-      .value("kSinkCreated", RawEvent::Kind::kSinkCreated)
-      .value("kSinkDestroyed", RawEvent::Kind::kSinkDestroyed)
-      .value("kSinkEnabled", RawEvent::Kind::kSinkEnabled)
-      .value("kSinkDisabled", RawEvent::Kind::kSinkDisabled)
-      .value("kNetworkInterfacesChanged", RawEvent::Kind::kNetworkInterfacesChanged);
+      
+    m.def("getNetworkInterfaces", &GetNetworkInterfaces);
     
     // cscore_oo.h
 
@@ -319,15 +305,38 @@ PYBIND11_PLUGIN(_cscore) {
       .def("getError", &CvSink::GetError)
       .def("setEnabled", &CvSink::SetEnabled);
     
-    py::class_<VideoEvent> videoevent(m, "VideoEvent");
+    py::class_<RawEvent> rawevent(m, "RawEvent");
+    
+    py::enum_<RawEvent::Kind>(rawevent, "Kind")
+      .value("kSourceCreated", RawEvent::Kind::kSourceCreated)
+      .value("kSourceDestroyed", RawEvent::Kind::kSourceDestroyed)
+      .value("kSourceConnected", RawEvent::Kind::kSourceConnected)
+      .value("kSourceDisconnected", RawEvent::Kind::kSourceDisconnected)
+      .value("kSourceVideoModesUpdated", RawEvent::Kind::kSourceVideoModesUpdated)
+      .value("kSourceVideoModeChanged", RawEvent::Kind::kSourceVideoModeChanged)
+      .value("kSourcePropertyCreated", RawEvent::Kind::kSourcePropertyCreated)
+      .value("kSourcePropertyValueUpdated", RawEvent::Kind::kSourcePropertyValueUpdated)
+      .value("kSourcePropertyChoicesUpdated", RawEvent::Kind::kSourcePropertyChoicesUpdated)
+      .value("kSinkSourceChanged", RawEvent::Kind::kSinkSourceChanged)
+      .value("kSinkCreated", RawEvent::Kind::kSinkCreated)
+      .value("kSinkDestroyed", RawEvent::Kind::kSinkDestroyed)
+      .value("kSinkEnabled", RawEvent::Kind::kSinkEnabled)
+      .value("kSinkDisabled", RawEvent::Kind::kSinkDisabled)
+      .value("kNetworkInterfacesChanged", RawEvent::Kind::kNetworkInterfacesChanged);
+    
+    py::class_<VideoEvent, RawEvent> videoevent(m, "VideoEvent");
     videoevent
       .def("getSource", &VideoEvent::GetSource)
       .def("getSink", &VideoEvent::GetSink)
-      .def("getProperty", &VideoEvent::GetProperty);
+      .def("getProperty", &VideoEvent::GetProperty)
+      .def_readonly("name", &VideoEvent::name)
+      .def_readonly("mode", &VideoEvent::mode)
+      .def_readonly("kind", &VideoEvent::kind)
+      .def_readonly("value", &VideoEvent::value)
+      .def_readonly("valueStr", &VideoEvent::valueStr);
     
     py::class_<VideoListener> videolistener(m, "VideoListener");
     videolistener
-      .def(py::init<>())
       .def(py::init<std::function<void(const VideoEvent&)>,int,bool>());
 
     return m.ptr();
