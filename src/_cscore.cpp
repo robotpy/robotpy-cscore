@@ -13,14 +13,9 @@ using namespace cs;
 #include "ndarray_converter.h"
 #include "wpiutil_converters.hpp"
 
-
-class cscore_destructor {
-public:
-    ~cscore_destructor() {
-        CS_Destroy();
-    }
-};
-
+llvm::StringRef con(const llvm::StringRef &v) {
+    return v;
+}
 
 PYBIND11_PLUGIN(_cscore) {
 
@@ -28,8 +23,11 @@ PYBIND11_PLUGIN(_cscore) {
 
     py::module m("_cscore");
     
-    py::class_<cscore_destructor> _d(m, "cscore_destructor");
-    m.attr("__destructor") = new cscore_destructor();
+    static int unused; // the capsule needs something to reference
+    py::capsule cleanup(&unused, [](PyObject *) { CS_Destroy(); });
+    m.add_object("_cleanup", cleanup);
+    
+    m.def("con", &con);
     
     // cscore_cpp.h
     
@@ -147,6 +145,11 @@ PYBIND11_PLUGIN(_cscore) {
       .def("getLastStatus", &VideoSource::GetLastStatus)
       .def("enumerateSinks", &VideoSource::EnumerateSinks)
       .def_static("enumerateSources", &VideoSource::EnumerateSources);
+      //.def("__repr__", [](VideoSource &__inst){
+      //  std::stringstream id;
+      //  id << (void const *)&__inst;
+      //  return std::string("<VideoSource name=") + __inst.GetName() + " kind=" + std::to_string(__inst.GetKind()) + " at" + id.str() + ">";
+      //});
     
     py::enum_<VideoSource::Kind>(videosource, "Kind")
       .value("kUnknown", VideoSource::Kind::kUnknown)
@@ -306,6 +309,12 @@ PYBIND11_PLUGIN(_cscore) {
       .def("setEnabled", &CvSink::SetEnabled);
     
     py::class_<RawEvent> rawevent(m, "RawEvent");
+    rawevent
+      .def_readonly("kind", &RawEvent::kind)
+      .def_readonly("mode", &RawEvent::mode)
+      .def_readonly("name", &RawEvent::name)
+      .def_readonly("value", &RawEvent::value)
+      .def_readonly("valueStr", &RawEvent::valueStr);
     
     py::enum_<RawEvent::Kind>(rawevent, "Kind")
       .value("kSourceCreated", RawEvent::Kind::kSourceCreated)
@@ -328,12 +337,8 @@ PYBIND11_PLUGIN(_cscore) {
     videoevent
       .def("getSource", &VideoEvent::GetSource)
       .def("getSink", &VideoEvent::GetSink)
-      .def("getProperty", &VideoEvent::GetProperty)
-      .def_readonly("name", &VideoEvent::name)
-      .def_readonly("mode", &VideoEvent::mode)
-      .def_readonly("kind", &VideoEvent::kind)
-      .def_readonly("value", &VideoEvent::value)
-      .def_readonly("valueStr", &VideoEvent::valueStr);
+      .def("getProperty", &VideoEvent::GetProperty);
+      
     
     py::class_<VideoListener> videolistener(m, "VideoListener");
     videolistener

@@ -49,6 +49,8 @@ class CameraServer:
     def _makeSourceValue(source):
         kind = source.getKind()
         if kind == VideoSource.Kind.kUsb:
+            source = cscore.UsbCamera(source)
+            print("USB: " + str(type(source)), dir(source))
             return "usb:" + source.getPath()
         
         elif kind == VideoSource.Kind.kHttp:
@@ -84,15 +86,15 @@ class CameraServer:
             listenAddress = sink.getListenAddress()
             if listenAddress:
                 # If a listen address is specified, only use that
-                values.add(self._makeStreamValue(listenAddress, port))
+                values.append(self._makeStreamValue(listenAddress, port))
             else:
                 # Otherwise generate for hostname and all interface addresses
-                values.add(self._makeStreamValue(socket.gethostname() + ".local", port))
+                values.append(self._makeStreamValue(socket.gethostname() + ".local", port))
                 for addr in self._addresses:
                     if addr == "127.0.0.1":
                         continue    # ignore localhost
                     
-                    values.add(self._makeStreamValue(addr, port))
+                    values.append(self._makeStreamValue(addr, port))
     
             return values
     
@@ -219,7 +221,7 @@ class CameraServer:
 
     @staticmethod
     def _putSourcePropertyValue(table, event, isNew):
-        if event.name.startsWith("raw_"):
+        if event.name.startswith("raw_"):
             name = "RawProperty/" + event.name[4:]
             infoName = "RawPropertyInfo/" + event.name[4:]
         else:
@@ -255,6 +257,8 @@ class CameraServer:
         self._mutex = threading.RLock()
         
         self._defaultUsbDevice = 0 # type: AtomicInteger
+        self._primarySourceName = '' # type: String
+        
         self._sources = {}  # type: Dict[str, VideoSource]
         self._sinks = {}  # type: Dict[str, VideoSink]
         self._tables = {}  # type: Dict[int, networktables.NetworkTable]
@@ -289,13 +293,22 @@ class CameraServer:
                                             NetworkTables.NotifyFlags.IMMEDIATE | NetworkTables.NotifyFlags.UPDATE)
 
     def _onVideoEvent(self, event):
+        #
+        
+        print(event)
+        print(event.kind)
+        print(event.valueStr)
+        print(event.name)
+        
         source = event.getSource()
+        print(source)
+        
         
         if event.kind == VideoEvent.Kind.kSourceCreated:
             # Create subtable for the camera
             table = self._publishTable.getSubTable(event.name)
             with self._mutex:
-                self._tables.put(source.getHandle(), table)
+                self._tables[source.getHandle()] = table
 
             table.putString("source", self._makeSourceValue(source))
             table.putString("description", source.getDescription())
@@ -433,7 +446,7 @@ class CameraServer:
         if camera is not None:
             assert dev is None and name is None and path is None
         else:
-            if not hasattr(cscore, 'USBCamera'):
+            if not hasattr(cscore, 'UsbCamera'):
                 raise VideoException("USB Camera support not available on this platform!")
             
             if dev is not None:
@@ -451,9 +464,11 @@ class CameraServer:
                 arg = 0
             
             if name is None:
-                name = 'USB Camera %d' % dev
+                name = 'USB Camera %d' % arg
             
             camera = cscore.UsbCamera(name, arg)
+            print("start", camera)
+            print("start", camera.getName())
         
         self.addCamera(camera)
         server = self.addServer(name="serve_" + camera.getName())
@@ -522,7 +537,7 @@ class CameraServer:
         newsink.setSource(camera)
         
         with self._mutex:
-            self._sinks.put(name, newsink)
+            self._sinks[name] = newsink
         
         return newsink
     
@@ -568,8 +583,10 @@ class CameraServer:
                     self._nextPort += 1
                     
                 server = cscore.MjpegServer(name, port)
+                print("AddServer", server, name)
+                print("AddServer", server.getName())
             
-            self._sinks.put(server.getName(), server)
+            self._sinks[server.getName()] = server
             return server
     
     def removeServer(self, name):
@@ -586,11 +603,12 @@ class CameraServer:
         :param camera: Camera
         """
         name = camera.getName()
+        print("Camera", name)
         with self._mutex:
             if self._primarySourceName is None:
                 self._primarySourceName = name
             
-            self._sources.put(name, camera)
+            self._sources[name] = camera
     
     def removeCamera(self, name):
         """Removes a camera by name.
