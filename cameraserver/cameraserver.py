@@ -42,6 +42,10 @@ class CameraServer:
             cls._server = cls()
             return cls._server
         
+    @staticmethod
+    def enableLogging(level=logging.INFO):
+        cscore.enableLogging(level=level)
+        
     def _getSourceTable(self, source):
         return self._tables.get(source.getHandle())
     
@@ -49,12 +53,10 @@ class CameraServer:
     def _makeSourceValue(source):
         kind = source.getKind()
         if kind == VideoSource.Kind.kUsb:
-            source = cscore.UsbCamera(source)
-            print("USB: " + str(type(source)), dir(source))
-            return "usb:" + source.getPath()
+            return "usb:" + cscore.getUsbCameraPath(source.getHandle())
         
         elif kind == VideoSource.Kind.kHttp:
-            urls = source.getUrls()
+            urls = cscore.getHttpCameraUrls(source.getHandle())
             if urls:
                 return "ip:" + urls[0]
             else:
@@ -208,11 +210,13 @@ class CameraServer:
 
     @classmethod
     def _videoModeToString(cls, mode):
-        """/// Provide string description of video mode.
-        /// The returned string is "{widthx{height:format:fpsfps".
+        """Provide string description of video mode.
+           The returned string is "{widthx{height:format:fpsfps".
         """
-        return (mode.width + "x" + mode.height + " " + cls._pixelFormatToString(mode.pixelFormat)
-                + " " + mode.fps + " fps")
+        return '%sx%s %s %s fps' % (
+            mode.width, mode.height,
+            cls._pixelFormatToString(mode.pixelFormat),
+            mode.fps)
     
     @classmethod
     def _getSourceModeValues(cls, source):
@@ -257,7 +261,7 @@ class CameraServer:
         self._mutex = threading.RLock()
         
         self._defaultUsbDevice = 0 # type: AtomicInteger
-        self._primarySourceName = '' # type: String
+        self._primarySourceName = None # type: String
         
         self._sources = {}  # type: Dict[str, VideoSource]
         self._sinks = {}  # type: Dict[str, VideoSink]
@@ -293,16 +297,8 @@ class CameraServer:
                                             NetworkTables.NotifyFlags.IMMEDIATE | NetworkTables.NotifyFlags.UPDATE)
 
     def _onVideoEvent(self, event):
-        #
-        
-        print(event)
-        print(event.kind)
-        print(event.valueStr)
-        print(event.name)
-        
         source = event.getSource()
-        print(source)
-        
+        print("event", event.kind, event.name)
         
         if event.kind == VideoEvent.Kind.kSourceCreated:
             # Create subtable for the camera
@@ -467,8 +463,6 @@ class CameraServer:
                 name = 'USB Camera %d' % arg
             
             camera = cscore.UsbCamera(name, arg)
-            print("start", camera)
-            print("start", camera.getName())
         
         self.addCamera(camera)
         server = self.addServer(name="serve_" + camera.getName())
@@ -529,7 +523,7 @@ class CameraServer:
             if sink is not None:
                 kind = sink.getKind()
                 if kind != VideoSink.Kind.kCv:
-                    raise VideoException("expected OpenCV sink, but got " + kind)
+                    raise VideoException("expected OpenCV sink, but got %s (name: %s)" % (kind, name))
                 
                 return sink
         
@@ -550,7 +544,7 @@ class CameraServer:
         :param height: Height of the image being sent
         """
         source = cscore.CvSource(name, cscore.VideoMode.PixelFormat.kMJPEG, width, height, 30)
-        self.startAutomaticCapture(source)
+        self.startAutomaticCapture(camera=source)
         return source
     
     def addServer(self, *, name=None, port=None, server=None):
@@ -583,8 +577,6 @@ class CameraServer:
                     self._nextPort += 1
                     
                 server = cscore.MjpegServer(name, port)
-                print("AddServer", server, name)
-                print("AddServer", server.getName())
             
             self._sinks[server.getName()] = server
             return server
@@ -596,6 +588,24 @@ class CameraServer:
         """
         with self._mutex:
             self._sinks.pop(name, None)
+            
+    def getServer(self, name=None):
+        """Get server for the primary camera feed
+        
+        This is only valid to call after a camera feed has been added
+        with :meth:`startAutomaticCapture` or :meth:`addServer`
+        """
+        with self._mutex:
+            if name is None:
+                if self._primarySourceName is None:
+                    raise VideoException("No primary video source defined")
+                name = 'serve_' + self._primarySourceName 
+                
+            server = self._sources.get(name)
+            if server is None:
+                raise VideoException("server %s is not available" % server)
+            
+            return server
     
     def addCamera(self, camera):
         """Adds an already created camera.
@@ -603,7 +613,6 @@ class CameraServer:
         :param camera: Camera
         """
         name = camera.getName()
-        print("Camera", name)
         with self._mutex:
             if self._primarySourceName is None:
                 self._primarySourceName = name
@@ -617,3 +626,8 @@ class CameraServer:
         """
         with self._mutex:
             self._sources.pop(name, None)
+
+    def waitForever(self):
+        import time
+        while True:
+            time.sleep(1)

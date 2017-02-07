@@ -13,9 +13,6 @@ using namespace cs;
 #include "ndarray_converter.h"
 #include "wpiutil_converters.hpp"
 
-llvm::StringRef con(const llvm::StringRef &v) {
-    return v;
-}
 
 PYBIND11_PLUGIN(_cscore) {
 
@@ -26,8 +23,6 @@ PYBIND11_PLUGIN(_cscore) {
     static int unused; // the capsule needs something to reference
     py::capsule cleanup(&unused, [](PyObject *) { CS_Destroy(); });
     m.add_object("_cleanup", cleanup);
-    
-    m.def("con", &con);
     
     // cscore_cpp.h
     
@@ -61,9 +56,16 @@ PYBIND11_PLUGIN(_cscore) {
       .value("kRGB565", VideoMode::PixelFormat::kRGB565)
       .value("kBGR", VideoMode::PixelFormat::kBGR)
       .value("kGray", VideoMode::PixelFormat::kGray);
-      
-    m.def("getNetworkInterfaces", &GetNetworkInterfaces);
     
+    #define def_status_fn(n, N, T) def(n, [](T t) { CS_Status s = 0; return N(t, &s); })
+    
+    m.def("getNetworkInterfaces", &GetNetworkInterfaces)
+     .def_status_fn("getHttpCameraUrls", GetHttpCameraUrls, CS_Source)
+     .def_status_fn("getMjpegServerPort", GetHttpCameraUrls, CS_Sink)
+     .def("getMjpegServerListenAddress", &GetMjpegServerListenAddress)
+     .def_status_fn("getUsbCameraPath", GetUsbCameraPath, CS_Source)
+     .def("setLogger", &SetLogger);
+     
     // cscore_oo.h
 
     py::class_<VideoProperty> videoproperty(m, "VideoProperty");
@@ -314,7 +316,9 @@ PYBIND11_PLUGIN(_cscore) {
       .def_readonly("mode", &RawEvent::mode)
       .def_readonly("name", &RawEvent::name)
       .def_readonly("value", &RawEvent::value)
-      .def_readonly("valueStr", &RawEvent::valueStr);
+      .def_readonly("valueStr", &RawEvent::valueStr)
+      .def_readonly("sourceHandle", &RawEvent::sourceHandle)
+      .def_readonly("sinkHandle", &RawEvent::sinkHandle);
     
     py::enum_<RawEvent::Kind>(rawevent, "Kind")
       .value("kSourceCreated", RawEvent::Kind::kSourceCreated)
