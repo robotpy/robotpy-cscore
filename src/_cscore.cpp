@@ -22,7 +22,14 @@ PYBIND11_PLUGIN(_cscore) {
     py::module m("_cscore");
     
     static int unused; // the capsule needs something to reference
-    py::capsule cleanup(&unused, [](PyObject *) { CS_Destroy(); });
+    py::capsule cleanup(&unused, [](PyObject *) {
+        // don't release gil until after calling this
+        SetDefaultLogger(20 /* WPI_LOG_INFO */);
+        
+        // but this MUST release the gil, or deadlock may occur
+        py::gil_scoped_release __release;
+        CS_Destroy();
+    });
     m.add_object("_cleanup", cleanup);
     
     // cscore_cpp.h

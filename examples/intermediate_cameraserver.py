@@ -16,7 +16,7 @@ from cameraserver import CameraServer
 
 def main():
     cs = CameraServer.getInstance()
-    #cs.enableLogging()
+    cs.enableLogging()
     
     camera = cs.startAutomaticCapture()
     
@@ -27,10 +27,7 @@ def main():
     
     # Setup a CvSource. This will send images back to the Dashboard
     outputStream = cs.putVideo("Rectangle", 640, 480)
-    print(cvSink, outputStream)
-    print(cs._sinks)
-    print(cs._sources)
-
+    
     # Images are very memory expensive. Preallocate and use this
     img = np.zeros(shape=(480, 640, 3), dtype=np.uint8)    
 

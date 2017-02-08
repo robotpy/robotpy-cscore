@@ -298,7 +298,6 @@ class CameraServer:
 
     def _onVideoEvent(self, event):
         source = event.getSource()
-        print("event", event.kind, event.name)
         
         if event.kind == VideoEvent.Kind.kSourceCreated:
             # Create subtable for the camera
