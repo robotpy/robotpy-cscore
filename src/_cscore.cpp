@@ -25,8 +25,6 @@ PYBIND11_PLUGIN(_cscore) {
     py::capsule cleanup(&unused, [](PyObject *) { CS_Destroy(); });
     m.add_object("_cleanup", cleanup);
     
-    m.def("breakpoint", []() -> void { __asm__ volatile("int $0x03"); });
-    
     // cscore_cpp.h
     
     py::class_<UsbCameraInfo> usbcamerainfo(m, "UsbCameraInfo");
