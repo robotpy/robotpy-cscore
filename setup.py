@@ -161,7 +161,6 @@ def get_cscore_sources(d):
         l.extend(glob.glob(d + "/osx/*.cpp"))
     else:
         l.extend(glob.glob(d + "/linux/*.cpp"))
-    print(l)
     return l
 
 
@@ -260,7 +259,8 @@ setup(
     packages=find_packages(),
     ext_modules=ext_modules,
     setup_requires=["numpy", "pybind11>=2.2"],
-    install_requires=["numpy", "pynetworktables"],
+    install_requires=["numpy"],
+    extras_require={"cameraserver": ["pynetworktables>=2018.0"]},
     license="BSD",
     zip_safe=False,
     cmdclass={"build_ext": BuildExt},

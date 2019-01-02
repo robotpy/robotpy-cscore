@@ -16,8 +16,6 @@ import logging
 
 logger = logging.getLogger("cscore.cserver")
 
-from networktables import NetworkTables
-
 __all__ = ["CameraServer", "VideoException"]
 
 
@@ -225,6 +223,8 @@ class CameraServer:
                 entry.setString(event.valueStr)
 
     def __init__(self):
+        from networktables import NetworkTables
+
         self._mutex = threading.RLock()
 
         self._defaultUsbDevice = 0  # note: atomic upstream, keep accesses thread-safe

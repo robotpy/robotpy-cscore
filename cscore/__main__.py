@@ -8,7 +8,10 @@ import stat
 import sys
 import threading
 
-from networktables import NetworkTables
+try:
+    from networktables import NetworkTables
+except ImportError:
+    NetworkTables = None
 
 log_datefmt = "%H:%M:%S"
 log_format = "%(asctime)s:%(msecs)03d %(levelname)-8s: %(name)-20s: %(message)s"
@@ -70,10 +73,15 @@ def main():
     logger = logging.getLogger("cscore")
 
     # Initialize NetworkTables next
-    if args.team:
-        NetworkTables.startClientTeam(args.team)
+    if NetworkTables is not None:
+        if args.team:
+            NetworkTables.startClientTeam(args.team)
+        else:
+            NetworkTables.initialize(server=args.robot)
     else:
-        NetworkTables.initialize(server=args.robot)
+        logger.warning(
+            "pynetworktables is not installed, skipping NetworkTables initialization."
+        )
 
     # If stdin is a pipe, then die when the pipe goes away
     # -> this allows us to detect if a parent process exits
