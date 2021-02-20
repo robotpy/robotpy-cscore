@@ -282,7 +282,11 @@ setup(
     long_description=long_description,
     packages=find_packages(),
     ext_modules=ext_modules,
-    install_requires=["numpy", "pynetworktables"],
+    install_requires=[
+        "numpy",
+        "pynetworktables",
+        'robotpy-opencv; platform_machine == "armv7l"',
+    ],
     license="BSD",
     zip_safe=False,
     cmdclass={"build_ext": BuildExt},
