@@ -14,6 +14,8 @@ from ntcore import NetworkTableInstance
 log_datefmt = "%H:%M:%S"
 log_format = "%(asctime)s:%(msecs)03d %(levelname)-8s: %(name)-20s: %(message)s"
 
+logger = logging.getLogger("cscore")
+
 _raise_kb = True
 
 
@@ -28,6 +30,9 @@ def _parent_poll_thread():
 
     global _raise_kb
     _raise_kb = False
+
+    from ._cscore import stopMainRunLoop
+    stopMainRunLoop()
 
     os.kill(os.getpid(), signal.SIGINT)
 
@@ -78,7 +83,6 @@ def main():
     from ._logging import enableLogging
 
     enableLogging(level=log_level)
-    logger = logging.getLogger("cscore")
 
     # Initialize NetworkTables next
     ntinst = NetworkTableInstance.getDefault()
@@ -105,10 +109,11 @@ def main():
 
         # If no python file specified, then just start the automatic capture
         if args.vision_py is None:
-            from ._cscore import CameraServer
+            from ._cscore import CameraServer, runMainRunLoopTimeout
 
             CameraServer.startAutomaticCapture()
-            CameraServer.waitForever()
+            while True:
+                runMainRunLoopTimeout(1)
 
         else:
             s = args.vision_py.split(":", 1)
