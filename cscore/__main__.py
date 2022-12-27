@@ -15,8 +15,6 @@ log_format = "%(asctime)s:%(msecs)03d %(levelname)-8s: %(name)-20s: %(message)s"
 
 logger = logging.getLogger("cscore")
 
-_raise_kb = True
-
 
 def _parent_poll_thread() -> None:
     """Kills process if input disappears"""
@@ -29,12 +27,7 @@ def _parent_poll_thread() -> None:
     except Exception:
         pass
 
-    global _raise_kb
-    _raise_kb = False
-
     stopMainRunLoop()
-
-    os.kill(os.getpid(), signal.SIGINT)
 
 
 def _run_user_thread(vision_py: str, vision_fn: str) -> None:
@@ -162,9 +155,7 @@ def main():
         SIGNALED = 2
         while runMainRunLoopTimeout(1) != SIGNALED:
             pass
-    except KeyboardInterrupt:
-        if _raise_kb:
-            raise
+
     finally:
         logger.warning("cscore exiting")
 
