@@ -7,7 +7,6 @@ import signal
 import stat
 import sys
 import threading
-import time
 
 from ntcore import NetworkTableInstance
 
@@ -19,8 +18,10 @@ logger = logging.getLogger("cscore")
 _raise_kb = True
 
 
-def _parent_poll_thread():
+def _parent_poll_thread() -> None:
     """Kills process if input disappears"""
+    from ._cscore import stopMainRunLoop
+
     try:
         while True:
             if not sys.stdin.read():
@@ -31,10 +32,45 @@ def _parent_poll_thread():
     global _raise_kb
     _raise_kb = False
 
-    from ._cscore import stopMainRunLoop
     stopMainRunLoop()
 
     os.kill(os.getpid(), signal.SIGINT)
+
+
+def _run_user_thread(vision_py: str, vision_fn: str) -> None:
+    vision_pymod = splitext(basename(vision_py))[0]
+
+    logger.info("Loading %s (%s)", vision_py, vision_fn)
+
+    sys.path.insert(0, dirname(vision_py))
+
+    loader = importlib.machinery.SourceFileLoader(vision_pymod, vision_py)
+    vision_module = loader.load_module(vision_pymod)
+
+    try:
+        obj = getattr(vision_module, vision_fn)
+
+        # If the object has a 'process' function, then we assume
+        # that it is a GRIP-generated pipeline, so launch it via the
+        # GRIP shim
+        if hasattr(obj, "process"):
+            logger.info("-> Detected GRIP-compatible object")
+
+            from . import grip
+
+            grip.run(obj)
+        else:
+            # otherwise just call it
+            obj()
+
+    except Exception:
+        logger.exception("%s exited unexpectedly", vision_py)
+    finally:
+        logger.warning("%s exited", vision_py)
+
+        from ._cscore import stopMainRunLoop
+
+        stopMainRunLoop()
 
 
 def main():
@@ -99,57 +135,33 @@ def main():
     # If stdin is a pipe, then die when the pipe goes away
     # -> this allows us to detect if a parent process exits
     if stat.S_ISFIFO(os.fstat(0).st_mode):
-        t = threading.Thread(target=_parent_poll_thread)
-        t.daemon = True
+        t = threading.Thread(target=_parent_poll_thread, name="lifetime", daemon=True)
         t.start()
 
-    global _raise_kb
+    # If no python file specified, then just start the automatic capture
+    if args.vision_py is None:
+        from ._cscore import CameraServer
+
+        CameraServer.startAutomaticCapture()
+    else:
+        s = args.vision_py.split(":", 1)
+        vision_py = abspath(s[0])
+        vision_fn = "main" if len(s) == 1 else s[1]
+
+        thread = threading.Thread(
+            target=_run_user_thread,
+            args=(vision_py, vision_fn),
+            name="vision",
+            daemon=True,
+        )
+        thread.start()
 
     try:
+        from ._cscore import runMainRunLoopTimeout
 
-        # If no python file specified, then just start the automatic capture
-        if args.vision_py is None:
-            from ._cscore import CameraServer, runMainRunLoopTimeout
-
-            CameraServer.startAutomaticCapture()
-            while True:
-                runMainRunLoopTimeout(1)
-
-        else:
-            s = args.vision_py.split(":", 1)
-            vision_py = abspath(s[0])
-            vision_fn = "main" if len(s) == 1 else s[1]
-
-            vision_pymod = splitext(basename(vision_py))[0]
-
-            logger.info("Loading %s (%s)", vision_py, vision_fn)
-
-            sys.path.insert(0, dirname(vision_py))
-
-            loader = importlib.machinery.SourceFileLoader(vision_pymod, vision_py)
-            vision_module = loader.load_module(vision_pymod)
-
-            try:
-                obj = getattr(vision_module, vision_fn)
-
-                # If the object has a 'process' function, then we assume
-                # that it is a GRIP-generated pipeline, so launch it via the
-                # GRIP shim
-                if hasattr(obj, "process"):
-                    logger.info("-> Detected GRIP-compatible object")
-
-                    from . import grip
-
-                    grip.run(obj)
-                else:
-                    # otherwise just call it
-                    obj()
-
-            except Exception:
-                logger.exception("%s exited unexpectedly", vision_py)
-            finally:
-                logger.warning("%s exited", vision_py)
-
+        SIGNALED = 2
+        while runMainRunLoopTimeout(1) != SIGNALED:
+            pass
     except KeyboardInterrupt:
         if _raise_kb:
             raise
