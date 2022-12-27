@@ -3,7 +3,6 @@ import importlib.machinery
 import os
 import logging
 from os.path import abspath, basename, dirname, splitext
-import signal
 import stat
 import sys
 import threading
